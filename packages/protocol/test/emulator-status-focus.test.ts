@@ -53,6 +53,37 @@ describe("MicroEmulator thstatus → six states", () => {
     );
     expect(emu.getSlots()[3]!.state).toBe("awaiting");
   });
+
+  it("parses real ChatGPT minimized array params [{id,c,b,e,s}]", () => {
+    const emu = new MicroEmulator();
+    const lighting = vi.fn();
+    emu.on("lighting", lighting);
+
+    // Shape from RPCApiOAI.sendThreadsLighting after W() mapping
+    emu.handleRequestText(
+      JSON.stringify({
+        id: 99,
+        method: "v.oai.thstatus",
+        params: [
+          { id: 0, c: 0, b: 0, e: 0, s: 0 }, // off
+          { id: 1, c: 0xffffff, b: 1, e: 1, s: 0 }, // idle
+          { id: 2, c: 0x304ffe, b: 1, e: 1, s: 0 }, // working
+          { id: 3, c: 0x00ff4c, b: 1, e: 1, s: 0 }, // unread/complete
+          { id: 4, c: 0xff6d00, b: 1, e: 1, s: 0 }, // awaiting
+          { id: 5, c: 0xff0033, b: 1, e: 1, s: 0 }, // error
+        ],
+      }),
+    );
+
+    expect(lighting).toHaveBeenCalled();
+    const slots = emu.getSlots();
+    expect(slots[0]!.state).toBe("off");
+    expect(slots[1]!.state).toBe("idle");
+    expect(slots[2]!.state).toBe("working");
+    expect(slots[3]!.state).toBe("complete");
+    expect(slots[4]!.state).toBe("awaiting");
+    expect(slots[5]!.state).toBe("error");
+  });
 });
 
 describe("MicroEmulator focus AG00–AG05", () => {

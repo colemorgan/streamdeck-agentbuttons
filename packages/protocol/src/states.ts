@@ -36,7 +36,13 @@ export function mapStatusToState(
     if (s === "working" || s === "thinking" || s === "running") return "working";
     if (s === "unread" || s === "complete" || s === "done" || s === "finished")
       return "complete";
-    if (s.startsWith("awaiting") || s === "needs_input" || s === "needs-input")
+    if (
+      s.startsWith("awaiting") ||
+      s === "needs_input" ||
+      s === "needs-input" ||
+      s === "awaiting-approval" ||
+      s === "awaiting-response"
+    )
       return "awaiting";
     if (s === "error" || s === "failed" || s === "failure") return "error";
   }

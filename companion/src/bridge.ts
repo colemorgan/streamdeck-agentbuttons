@@ -57,7 +57,15 @@ export class Bridge {
 
   /** Feed host (ChatGPT) text into the Micro emulator. */
   feedHostText(chunk: string): void {
+    if (chunk && chunk.length > 0) {
+      const preview = chunk.length > 200 ? `${chunk.slice(0, 200)}…` : chunk;
+      this.emitLog(`host→device ${preview.replace(/\n/g, "\\n")}`);
+    }
     this.emulator.feedHostText(chunk);
+  }
+
+  private emitLog(msg: string): void {
+    for (const fn of this.logListeners) fn(msg);
   }
 
   focusSlot(slot: number): void {

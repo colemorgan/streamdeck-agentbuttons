@@ -28,6 +28,29 @@ type RpcRequest = {
 
 const FIRMWARE_VERSION = "agentbuttons-0.1.0";
 
+/** Normalize various host lighting param shapes into a list of slot objects. */
+export function normalizeThreadLightingItems(params: unknown): unknown[] {
+  // Real ChatGPT: params is minimized array [{id,c,b,e,s,...}]
+  if (Array.isArray(params)) return params;
+
+  if (!params || typeof params !== "object") return [];
+
+  const p = params as Record<string, unknown>;
+  const nested =
+    (p.slots as unknown) ?? (p.threads as unknown) ?? (p.th as unknown);
+  if (Array.isArray(nested)) return nested;
+
+  // { "0": {...}, "1": {...} }
+  const fromKeys: unknown[] = [];
+  for (let slot = 0; slot < 6; slot++) {
+    const entry = p[String(slot)] ?? p[slot as unknown as string];
+    if (entry && typeof entry === "object") {
+      fromKeys.push({ id: slot, ...(entry as object) });
+    }
+  }
+  return fromKeys;
+}
+
 /**
  * Transport-agnostic Codex Micro JSON-RPC state machine.
  * Feed host text via {@link feedHostText}; outbound lines are newline-terminated.
@@ -81,7 +104,8 @@ export class MicroEmulator {
   handleRequest(req: RpcRequest): void {
     const method = req.method ?? req.m ?? "";
     const id = req.id;
-    const params = (req.params ?? req.p ?? {}) as Record<string, unknown>;
+    // ChatGPT may send params as object OR array (v.oai.thstatus uses array)
+    const params = req.params ?? req.p ?? {};
 
     let result: unknown = true;
 
@@ -104,6 +128,9 @@ export class MicroEmulator {
         break;
       case "v.oai.thstatus":
         result = true;
+        this.emitLog(
+          `thstatus params=${Array.isArray(params) ? `array[${params.length}]` : typeof params}`,
+        );
         this.applyThreadStatus(params);
         break;
       default:
@@ -130,50 +157,48 @@ export class MicroEmulator {
     return encodeReports(withNl, CHANNEL_RPC);
   }
 
-  private applyThreadStatus(params: Record<string, unknown>): void {
-    // Accept several shapes:
-    // { slots: [{ i, status, color }, ...] }
-    // { threads: [...] }
-    // { 0: { status }, 1: ... }
+  /**
+   * Parse host → device thread lighting.
+   *
+   * Real ChatGPT/Work Louder format (params is an array):
+   *   [{ id, c, b, e, s, sk?, sa? }, ...]
+   * where c is packed RGB from status:
+   *   working=0x304FFE, unread=0x00FF4C, idle=0xFFFFFF,
+   *   awaiting-*=0xFF6D00, error=0xFF0033, off=0
+   *
+   * Also accepts test/demo shapes:
+   *   { slots: [{ i|id, status, color }] } | { threads: [...] }
+   */
+  private applyThreadStatus(params: unknown): void {
     const updated: SlotStatus[] = [];
+    const items = normalizeThreadLightingItems(params);
 
-    const list =
-      (params.slots as unknown[]) ??
-      (params.threads as unknown[]) ??
-      (params.th as unknown[]) ??
-      null;
+    for (const item of items) {
+      if (!item || typeof item !== "object") continue;
+      const o = item as Record<string, unknown>;
+      const slot = Number(
+        o.id ?? o.i ?? o.slot ?? o.index ?? o.ag ?? -1,
+      );
+      if (!Number.isInteger(slot) || slot < 0 || slot > 5) continue;
 
-    if (Array.isArray(list)) {
-      for (const item of list) {
-        if (!item || typeof item !== "object") continue;
-        const o = item as Record<string, unknown>;
-        const slot = Number(o.i ?? o.slot ?? o.index ?? o.ag ?? -1);
-        if (slot < 0 || slot > 5) continue;
-        const status = (o.status ?? o.state ?? o.s) as string | undefined;
-        const color = o.color != null ? Number(o.color) : null;
-        const state = mapStatusToState(status, color);
-        const packed =
-          color != null && !Number.isNaN(color)
-            ? color & 0xffffff
-            : STATE_COLORS[state];
-        this.slots[slot] = { slot, state, color: packed };
-        updated.push(this.slots[slot]!);
-      }
-    } else {
-      for (let slot = 0; slot < 6; slot++) {
-        const entry = params[String(slot)] ?? params[slot];
-        if (!entry || typeof entry !== "object") continue;
-        const o = entry as Record<string, unknown>;
-        const status = (o.status ?? o.state) as string | undefined;
-        const color = o.color != null ? Number(o.color) : null;
-        const state = mapStatusToState(status, color);
-        const packed =
-          color != null && !Number.isNaN(color)
-            ? color & 0xffffff
-            : STATE_COLORS[state];
-        this.slots[slot] = { slot, state, color: packed };
-        updated.push(this.slots[slot]!);
-      }
+      // Real payload uses short keys: c=color, optional status string
+      const colorRaw = o.c ?? o.color;
+      const color =
+        colorRaw != null && !Number.isNaN(Number(colorRaw))
+          ? Number(colorRaw) & 0xffffff
+          : null;
+
+      const status =
+        typeof o.status === "string"
+          ? o.status
+          : typeof o.state === "string"
+            ? o.state
+            : undefined;
+
+      const state = mapStatusToState(status, color);
+      const packed = color != null ? color : STATE_COLORS[state];
+      this.slots[slot] = { slot, state, color: packed };
+      updated.push(this.slots[slot]!);
     }
 
     if (updated.length > 0) {
