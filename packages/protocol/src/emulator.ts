@@ -39,10 +39,17 @@ export class MicroEmulator {
     state: "off" as AgentState,
     color: STATE_COLORS.off,
   }));
-  private listeners: Partial<EmulatorEvents> = {};
+  private lightingListeners: Array<EmulatorEvents["lighting"]> = [];
+  private outboundListeners: Array<EmulatorEvents["outbound"]> = [];
+  private logListeners: Array<EmulatorEvents["log"]> = [];
 
   on<K extends keyof EmulatorEvents>(event: K, fn: EmulatorEvents[K]): void {
-    this.listeners[event] = fn;
+    if (event === "lighting")
+      this.lightingListeners.push(fn as EmulatorEvents["lighting"]);
+    else if (event === "outbound")
+      this.outboundListeners.push(fn as EmulatorEvents["outbound"]);
+    else if (event === "log")
+      this.logListeners.push(fn as EmulatorEvents["log"]);
   }
 
   getSlots(): readonly SlotStatus[] {
@@ -170,17 +177,19 @@ export class MicroEmulator {
     }
 
     if (updated.length > 0) {
-      this.listeners.lighting?.(this.slots.map((s) => ({ ...s })));
+      const snapshot = this.slots.map((s) => ({ ...s }));
+      for (const fn of this.lightingListeners) fn(snapshot);
     }
   }
 
   private sendJson(value: unknown): void {
     const line = JSON.stringify(value);
     // device→host must be newline-delimited
-    this.listeners.outbound?.(line.endsWith("\n") ? line : `${line}\n`);
+    const out = line.endsWith("\n") ? line : `${line}\n`;
+    for (const fn of this.outboundListeners) fn(out);
   }
 
   private emitLog(msg: string): void {
-    this.listeners.log?.(msg);
+    for (const fn of this.logListeners) fn(msg);
   }
 }

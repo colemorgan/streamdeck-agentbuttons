@@ -4,79 +4,83 @@ Stream Deck **Marketplace-shaped plugin** + **macOS companion** for live ChatGPT
 
 **Not affiliated with OpenAI, Work Louder, or Elgato.**
 
-## Status
+## What you get (MVP)
 
-| Piece | State |
-|-------|--------|
-| Requirements / plan | ✅ `docs/brainstorms/…`, `docs/plans/…` |
-| Protocol package (framing, emulator, IPC schema) | ✅ tests green |
-| Companion bridge + IPC + demo mode | ✅ (ChatGPT shim detection still next) |
-| Plugin live status + focus IPC | ✅ (install + demo verified next) |
-| ChatGPT Micro detection (shim) | 🚧 |
-| Profiles / Marketplace pack | later |
+- Up to **six agent slots** with live states: `off`, `idle`, `working`, `complete`, `awaiting`, `error`
+- **Offline** key face when the companion is not connected (distinct from idle)
+- **Press** a slot → companion emits Micro `AG0N` press/release (focus)
+- Companion can run **demo** (no ChatGPT) or **`--chatgpt`** (shim socket for live Micro protocol)
 
 ## Architecture
 
 ```
 ChatGPT desktop  ←→  macOS companion (Micro protocol)  ←→  Stream Deck plugin  ←→  Stream Deck
-                              WebSocket localhost
+     (optional shim)         WebSocket localhost IPC
 ```
 
-Live colors only work when ChatGPT believes a **Codex Micro** is connected. The companion provides that presence; the plugin never injects into ChatGPT.
+Live colors from ChatGPT only work when the app believes a **Codex Micro** is connected. The companion provides that presence; the plugin never injects into ChatGPT.
 
-## Repo layout
+## Install order (cold-start)
 
-- `packages/protocol` — HID framing, Micro JSON-RPC emulator, state map, IPC types
-- `companion` — long-running bridge (GitHub release target)
-- `plugin` — Elgato Stream Deck plugin (`com.colemorgan.codex-agent-buttons`)
+1. **Build the plugin** and load it in Stream Deck Software  
+2. **Start the companion** (`--demo` and/or `--chatgpt`)  
+3. For live ChatGPT status: **launch ChatGPT with the shim** (`companion/scripts/launch-chatgpt.sh`)  
+4. Add **Agent Slot** actions (slots 1–6); assign tasks in ChatGPT Micro settings if live  
+5. Verify one key changes color; press focuses that agent when ChatGPT is linked  
+
+Default IPC: **`ws://127.0.0.1:19847`**
 
 ## Develop
 
-Requires **Node 24+** (Elgato CLI) and Stream Deck Software 7.1+.
+Requires **Node 24+** and Stream Deck Software 7.1+ (for the plugin).
 
 ```bash
 nvm use 24
 npm install
-npm run test:protocol
+npm test
 npm run build -w @agentbuttons/protocol
+npm run build -w @agentbuttons/companion
 npm run build -w @agentbuttons/plugin
+```
+
+### Companion
+
+```bash
+# Demo status only (no ChatGPT)
+node companion/dist/cli.js --verbose --demo
+
+# Live path: shim socket + optional demo
+node companion/dist/cli.js --verbose --chatgpt
+# then in another terminal:
+chmod +x companion/scripts/launch-chatgpt.sh
+./companion/scripts/launch-chatgpt.sh
+```
+
+### Plugin
+
+```bash
+npm run build -w @agentbuttons/plugin
+# Install/link plugin/com.colemorgan.codex-agent-buttons.sdPlugin into Stream Deck
+# or: streamdeck restart com.colemorgan.codex-agent-buttons
 ```
 
 Plugin UUID: `com.colemorgan.codex-agent-buttons`  
 Action: **Agent Slot** (`slot` 0–5 → Micro `AG00`–`AG05`)
 
-### Install plugin locally
+## Repo layout
 
-```bash
-npm run build -w @agentbuttons/plugin
-streamdeck restart com.colemorgan.codex-agent-buttons
-# or link/copy the .sdPlugin folder into Stream Deck plugins dir
-```
-
-### Companion demo (no ChatGPT)
-
-```bash
-npm run build -w @agentbuttons/companion
-node companion/dist/cli.js --verbose --demo
-```
-
-Then place **Agent Slot** actions on your Stream Deck (set slot 1–6 in the property inspector). Keys should cycle colors.
-
-### Cold-start checklist
-
-1. `node companion/dist/cli.js --demo` (or real ChatGPT mode when shim lands)
-2. Stream Deck Software running with plugin loaded
-3. Add up to six **Agent Slot** actions; set each slot uniquely
-4. Confirm colors update; press a key (focus is no-op without ChatGPT link)
-
-## MVP
-
-Six agent slots with live state (idle / working / complete / awaiting / error) and press-to-focus. Command keys and dials come later.
+| Path | Role |
+|------|------|
+| `packages/protocol` | HID framing, Micro JSON-RPC, state map, IPC types |
+| `companion` | Bridge, IPC server, ChatGPT shim socket, CLI |
+| `companion/shim/preload.cjs` | Injected into ChatGPT via `NODE_OPTIONS` |
+| `plugin` | Elgato Stream Deck plugin |
 
 ## Docs
 
 - Requirements: `docs/brainstorms/2026-07-22-streamdeck-codex-agent-buttons-requirements.md`
 - Plan: `docs/plans/2026-07-22-001-feat-streamdeck-codex-agent-buttons-plan.md`
+- Companion: `companion/README.md`
 
 ## License
 

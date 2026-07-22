@@ -11,7 +11,9 @@
   "scripts": {
     "test": "npm run test --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
-    "test:protocol": "npm run test -w @agentbuttons/protocol"
+    "test:protocol": "npm run test -w @agentbuttons/protocol",
+    "companion": "npm run build -w @agentbuttons/protocol && npm run build -w @agentbuttons/companion && node companion/dist/cli.js",
+    "plugin:build": "npm run build -w @agentbuttons/plugin"
   },
   "engines": {
     "node": ">=20.5.1"
