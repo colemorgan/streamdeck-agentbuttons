@@ -38,6 +38,7 @@ const config = {
     commonjs(),
     !isWatching && terser(),
   ],
+  // Bundle workspace protocol into plugin so Stream Deck runtime needs only @elgato/streamdeck
   external: ["@elgato/streamdeck"],
 };
 

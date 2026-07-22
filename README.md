@@ -10,8 +10,9 @@ Stream Deck **Marketplace-shaped plugin** + **macOS companion** for live ChatGPT
 |-------|--------|
 | Requirements / plan | ✅ `docs/brainstorms/…`, `docs/plans/…` |
 | Protocol package (framing, emulator, IPC schema) | ✅ tests green |
-| Companion bridge + ChatGPT detection | 🚧 next |
-| Plugin live status + IPC | 🚧 next |
+| Companion bridge + IPC + demo mode | ✅ (ChatGPT shim detection still next) |
+| Plugin live status + focus IPC | ✅ (install + demo verified next) |
+| ChatGPT Micro detection (shim) | 🚧 |
 | Profiles / Marketplace pack | later |
 
 ## Architecture
@@ -52,7 +53,21 @@ streamdeck restart com.colemorgan.codex-agent-buttons
 # or link/copy the .sdPlugin folder into Stream Deck plugins dir
 ```
 
-Companion: `node companion/dist/cli.js --help` (bridge not fully implemented yet).
+### Companion demo (no ChatGPT)
+
+```bash
+npm run build -w @agentbuttons/companion
+node companion/dist/cli.js --verbose --demo
+```
+
+Then place **Agent Slot** actions on your Stream Deck (set slot 1–6 in the property inspector). Keys should cycle colors.
+
+### Cold-start checklist
+
+1. `node companion/dist/cli.js --demo` (or real ChatGPT mode when shim lands)
+2. Stream Deck Software running with plugin loaded
+3. Add up to six **Agent Slot** actions; set each slot uniquely
+4. Confirm colors update; press a key (focus is no-op without ChatGPT link)
 
 ## MVP
 
