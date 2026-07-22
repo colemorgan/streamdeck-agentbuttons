@@ -22,8 +22,14 @@ export type InstanceState = {
 
 /**
  * Normalize PI/settings slot to 0..5 (defaults to 0).
+ * Coerces string numbers from property inspector JSON ("2" → 2).
  */
-export function normalizeSlot(raw: number | undefined): number {
+export function normalizeSlot(raw: number | string | undefined | null): number {
+  if (typeof raw === "string" && raw.trim() !== "") {
+    const n = Number(raw);
+    if (Number.isInteger(n) && n >= 0 && n <= 5) return n;
+    return 0;
+  }
   if (typeof raw !== "number" || !Number.isInteger(raw) || raw < 0 || raw > 5) {
     return 0;
   }
@@ -37,7 +43,7 @@ export function normalizeSlot(raw: number | undefined): number {
 export function applySlotSettings(
   instances: Map<string, InstanceState>,
   contextId: string,
-  rawSlot: number | undefined,
+  rawSlot: number | string | undefined | null,
   connected: boolean,
   lastStatusBySlot: ReadonlyMap<number, AgentState>,
 ): InstanceState {
@@ -153,8 +159,11 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
   private async paint(contextId: string, inst: InstanceState): Promise<void> {
     const action = this.actions.find((a) => a.id === contextId);
     if (!action || !action.isKey()) return;
+    // Show slot number so PI changes are visually obvious
     const label = `A${inst.slot + 1}`;
+    const title =
+      inst.state === "offline" ? `${label}\noffline` : `${label}\n${inst.state}`;
     await action.setImage(stateImageDataUrl(inst.state, label));
-    await action.setTitle("");
+    await action.setTitle(title);
   }
 }

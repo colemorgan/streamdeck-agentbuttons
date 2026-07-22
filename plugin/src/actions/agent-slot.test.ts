@@ -53,4 +53,17 @@ describe("applySlotSettings (PI / onDidReceiveSettings path)", () => {
     expect(normalizeSlot(99)).toBe(0);
     expect(normalizeSlot(5)).toBe(5);
   });
+
+  it("coerces string slot values from PI JSON", () => {
+    expect(normalizeSlot("0")).toBe(0);
+    expect(normalizeSlot("2")).toBe(2);
+    expect(normalizeSlot("5")).toBe(5);
+    expect(normalizeSlot("nope")).toBe(0);
+
+    const instances = new Map<string, InstanceState>();
+    const lastStatus = new Map<number, AgentState>([[2, "working"]]);
+    const inst = applySlotSettings(instances, "ctx", "2", true, lastStatus);
+    expect(inst.slot).toBe(2);
+    expect(inst.state).toBe("working");
+  });
 });
