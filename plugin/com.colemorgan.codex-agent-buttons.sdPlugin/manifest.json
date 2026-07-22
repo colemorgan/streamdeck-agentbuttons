@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "UUID": "com.colemorgan.codex-agent-buttons",
+  "Name": "Codex Agent Buttons",
+  "Version": "0.1.0.0",
+  "Author": "Cole Morgan",
+  "Actions": [
+    {
+      "Name": "Agent Slot",
+      "UUID": "com.colemorgan.codex-agent-buttons.agent-slot",
+      "Icon": "imgs/actions/agent-slot/icon",
+      "Tooltip": "Live Codex agent status key (requires companion)",
+      "Controllers": ["Keypad"],
+      "UserTitleEnabled": false,
+      "PropertyInspectorPath": "ui/agent-slot.html",
+      "States": [
+        {
+          "Image": "imgs/actions/agent-slot/key",
+          "TitleAlignment": "middle"
+        }
+      ]
+    }
+  ],
+  "Category": "Codex Agent Buttons",
+  "CategoryIcon": "imgs/plugin/category-icon",
+  "CodePath": "bin/plugin.js",
+  "Description": "Live ChatGPT Codex agent status keys on Stream Deck. Requires the free macOS companion from GitHub so ChatGPT sees a virtual Codex Micro.",
+  "Icon": "imgs/plugin/marketplace",
+  "SDKVersion": 3,
+  "Software": {
+    "MinimumVersion": "6.9"
+  },
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "12.0"
+    }
+  ],
+  "Nodejs": {
+    "Version": "20",
+    "Debug": "enabled"
+  }
+}

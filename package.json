@@ -1,0 +1,20 @@
+{
+  "name": "streamdeck-agentbuttons",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Stream Deck Marketplace plugin + macOS companion for ChatGPT Codex agent status keys",
+  "workspaces": [
+    "packages/*",
+    "companion",
+    "plugin"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "test:protocol": "npm run test -w @agentbuttons/protocol"
+  },
+  "engines": {
+    "node": ">=20.5.1"
+  },
+  "license": "MIT"
+}
