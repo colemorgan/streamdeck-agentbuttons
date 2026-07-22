@@ -1,5 +1,6 @@
 import {
   action,
+  type DidReceiveSettingsEvent,
   type KeyDownEvent,
   SingletonAction,
   type WillAppearEvent,
@@ -10,14 +11,45 @@ import { CompanionIpcClient } from "../ipc-client.js";
 import type { AgentState } from "../render/agent-state.js";
 import { stateImageDataUrl } from "../render/state-image.js";
 
-type AgentSlotSettings = {
+export type AgentSlotSettings = {
   slot?: number;
 };
 
-type InstanceState = {
+export type InstanceState = {
   slot: number;
   state: AgentState | "offline";
 };
+
+/**
+ * Normalize PI/settings slot to 0..5 (defaults to 0).
+ */
+export function normalizeSlot(raw: number | undefined): number {
+  if (typeof raw !== "number" || !Number.isInteger(raw) || raw < 0 || raw > 5) {
+    return 0;
+  }
+  return raw;
+}
+
+/**
+ * Update (or create) the instance for a key when it appears or PI settings change.
+ * Rebinds which Micro agent slot this key follows and picks state from lastStatus.
+ */
+export function applySlotSettings(
+  instances: Map<string, InstanceState>,
+  contextId: string,
+  rawSlot: number | undefined,
+  connected: boolean,
+  lastStatusBySlot: ReadonlyMap<number, AgentState>,
+): InstanceState {
+  const slot = normalizeSlot(rawSlot);
+  const known = lastStatusBySlot.get(slot);
+  const state: AgentState | "offline" = !connected
+    ? "offline"
+    : (known ?? "off");
+  const inst: InstanceState = { slot, state };
+  instances.set(contextId, inst);
+  return inst;
+}
 
 /**
  * One physical key mapped to a Codex Micro agent slot (0–5).
@@ -28,6 +60,8 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
   private connected = false;
   /** context → instance */
   private instances = new Map<string, InstanceState>();
+  /** Latest status per Micro slot (0–5), from companion IPC */
+  private lastStatusBySlot = new Map<number, AgentState>();
 
   private ensureIpc(): CompanionIpcClient {
     if (this.ipc) return this.ipc;
@@ -39,9 +73,17 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
             inst.state = "offline";
             void this.paint(ctx, inst);
           }
+        } else {
+          // Re-apply last known statuses when companion comes back
+          for (const [ctx, inst] of this.instances) {
+            const known = this.lastStatusBySlot.get(inst.slot);
+            inst.state = known ?? "off";
+            void this.paint(ctx, inst);
+          }
         }
       },
       onStatus: (slot, state) => {
+        this.lastStatusBySlot.set(slot, state);
         for (const [ctx, inst] of this.instances) {
           if (inst.slot === slot) {
             inst.state = this.connected ? state : "offline";
@@ -58,12 +100,31 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
     ev: WillAppearEvent<AgentSlotSettings>,
   ): Promise<void> {
     this.ensureIpc();
-    const slot = normalizeSlot(ev.payload.settings.slot);
-    const inst: InstanceState = {
-      slot,
-      state: this.connected ? "off" : "offline",
-    };
-    this.instances.set(ev.action.id, inst);
+    const inst = applySlotSettings(
+      this.instances,
+      ev.action.id,
+      ev.payload.settings.slot,
+      this.connected,
+      this.lastStatusBySlot,
+    );
+    await this.paint(ev.action.id, inst);
+  }
+
+  /**
+   * Property inspector changed settings (e.g. slot select).
+   * Must rebind instances.Map — otherwise keys keep the willAppear-time slot.
+   */
+  override async onDidReceiveSettings(
+    ev: DidReceiveSettingsEvent<AgentSlotSettings>,
+  ): Promise<void> {
+    this.ensureIpc();
+    const inst = applySlotSettings(
+      this.instances,
+      ev.action.id,
+      ev.payload.settings.slot,
+      this.connected,
+      this.lastStatusBySlot,
+    );
     await this.paint(ev.action.id, inst);
   }
 
@@ -76,7 +137,12 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
   override async onKeyDown(
     ev: KeyDownEvent<AgentSlotSettings>,
   ): Promise<void> {
-    const slot = normalizeSlot(ev.payload.settings.slot);
+    // Prefer live instance map (stays in sync after PI changes); fall back to event settings
+    const fromMap = this.instances.get(ev.action.id)?.slot;
+    const slot =
+      fromMap !== undefined
+        ? fromMap
+        : normalizeSlot(ev.payload.settings.slot);
     const ipc = this.ensureIpc();
     const ok = ipc.focus(slot);
     if (!ok) {
@@ -91,11 +157,4 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
     await action.setImage(stateImageDataUrl(inst.state, label));
     await action.setTitle("");
   }
-}
-
-function normalizeSlot(raw: number | undefined): number {
-  if (typeof raw !== "number" || !Number.isInteger(raw) || raw < 0 || raw > 5) {
-    return 0;
-  }
-  return raw;
 }
