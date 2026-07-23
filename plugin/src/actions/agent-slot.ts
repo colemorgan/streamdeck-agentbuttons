@@ -70,14 +70,17 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
   private ensureIpc(): CompanionIpcClient {
     if (this.ipc) return this.ipc;
     this.ipc = new CompanionIpcClient({
+      onLog: (msg) => streamDeck.logger.info(msg),
       onConnection: (ok) => {
         this.connected = ok;
+        streamDeck.logger.info(`ipc connection=${ok}`);
         if (!ok) {
           for (const [ctx, inst] of this.instances) {
             inst.state = "offline";
             void this.paint(ctx, inst);
           }
         } else {
+          // Immediately reflect any cached status, then live updates follow
           for (const [ctx, inst] of this.instances) {
             const known = this.lastStatusBySlot.get(inst.slot);
             inst.state = known ?? "off";
@@ -87,9 +90,12 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
       },
       onStatus: (slot, state) => {
         this.lastStatusBySlot.set(slot, state);
+        streamDeck.logger.info(`ipc status slot=${slot} state=${state}`);
         for (const [ctx, inst] of this.instances) {
           if (inst.slot === slot) {
-            inst.state = this.connected ? state : "offline";
+            // Don't require connected flag race: status implies companion up
+            this.connected = true;
+            inst.state = state;
             void this.paint(ctx, inst);
           }
         }
@@ -135,13 +141,6 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
       this.lastStatusBySlot,
     );
     await this.paint(ev.action.id, inst);
-    // Confirm back to PI
-    if (ev.action.isKey()) {
-      await ev.action.sendToPropertyInspector({
-        message: `Plugin bound Slot ${slot + 1}`,
-        settings: { slot },
-      });
-    }
   }
 
   /**
@@ -171,12 +170,6 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
       this.lastStatusBySlot,
     );
     await this.paint(ev.action.id, inst);
-    if (ev.action.isKey()) {
-      await ev.action.sendToPropertyInspector({
-        message: `Plugin bound Slot ${slot + 1}`,
-        settings: { slot },
-      });
-    }
   }
 
   override onWillDisappear(

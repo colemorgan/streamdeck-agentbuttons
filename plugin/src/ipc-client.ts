@@ -1,3 +1,4 @@
+import WebSocket from "ws";
 import {
   DEFAULT_IPC_PORT,
   IPC_PROTOCOL_VERSION,
@@ -16,7 +17,7 @@ export type IpcClientHandlers = {
 
 /**
  * WebSocket client to the macOS companion.
- * Uses global WebSocket when available (Node 22+ / Stream Deck runtime).
+ * Uses the `ws` package — Stream Deck runs Node 20 without a global WebSocket.
  */
 export class CompanionIpcClient {
   private ws: WebSocket | null = null;
@@ -39,7 +40,12 @@ export class CompanionIpcClient {
   stop(): void {
     this.closed = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    this.ws?.close();
+    this.reconnectTimer = null;
+    try {
+      this.ws?.close();
+    } catch {
+      /* ignore */
+    }
     this.ws = null;
   }
 
@@ -58,9 +64,12 @@ export class CompanionIpcClient {
   private connect(): void {
     if (this.closed) return;
     try {
+      this.handlers.onLog?.(`ipc connecting ws://127.0.0.1:${this.port}`);
       const ws = new WebSocket(`ws://127.0.0.1:${this.port}`);
       this.ws = ws;
-      ws.onopen = () => {
+
+      ws.on("open", () => {
+        this.handlers.onLog?.("ipc open");
         this.handlers.onConnection?.(true);
         ws.send(
           serializeIpc({
@@ -69,21 +78,34 @@ export class CompanionIpcClient {
             role: "plugin",
           }),
         );
-      };
-      ws.onmessage = (ev) => {
+      });
+
+      ws.on("message", (data) => {
         const text =
-          typeof ev.data === "string" ? ev.data : String(ev.data);
+          typeof data === "string"
+            ? data
+            : Buffer.isBuffer(data)
+              ? data.toString("utf8")
+              : String(data);
         const msg = parseIpcMessage(text);
         if (!msg) return;
         this.dispatch(msg);
-      };
-      ws.onclose = () => {
+      });
+
+      ws.on("close", () => {
+        this.handlers.onLog?.("ipc close");
         this.handlers.onConnection?.(false);
         this.scheduleReconnect();
-      };
-      ws.onerror = () => {
-        ws.close();
-      };
+      });
+
+      ws.on("error", (err) => {
+        this.handlers.onLog?.(`ipc error: ${err.message}`);
+        try {
+          ws.close();
+        } catch {
+          /* ignore */
+        }
+      });
     } catch (e) {
       this.handlers.onLog?.(String(e));
       this.scheduleReconnect();
