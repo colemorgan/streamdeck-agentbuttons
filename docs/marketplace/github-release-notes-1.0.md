@@ -34,7 +34,7 @@ Stream Deck plugin + macOS companion for live ChatGPT Codex agent status.
 3. Companion → **Start Bridge** → **Launch ChatGPT with Agent Keys**
 4. Assign chats in ChatGPT Codex Micro settings; map Agent Slot keys 1–6
 
-Full guide: docs/user/setup.md
+Full guide: https://github.com/colemorgan/streamdeck-agentbuttons/blob/main/docs/user/setup.md
 
 ### Notes
 - Not affiliated with OpenAI, Work Louder, or Elgato

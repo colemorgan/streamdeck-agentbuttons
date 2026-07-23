@@ -43,8 +43,8 @@ Codex Agent Buttons brings ChatGPT desktop Codex agent status to Stream Deck.
 - ChatGPT updates may require a companion update  
 - Input Monitoring (for Micro key presses) is granted to **ChatGPT** in System Settings  
 
-**Support:** GitHub Issues (link to repo)  
-**Source / companion releases:** GitHub  
+**Support:** [GitHub Issues](https://github.com/colemorgan/streamdeck-agentbuttons/issues)  
+**Source / companion releases:** [github.com/colemorgan/streamdeck-agentbuttons](https://github.com/colemorgan/streamdeck-agentbuttons)  
 
 ## Screenshots checklist
 
@@ -62,4 +62,4 @@ Ship final assets under `plugin/.../imgs/` (marketplace, category, action) befor
 
 - **Plugin pack:** `1.0.0.0` via `npm run plugin:pack` → `dist/release/com.colemorgan.codex-agent-buttons.streamDeckPlugin`  
 - **Companion app:** `0.2.0` via `npm run companion:app`  
-- Workspace plugin may stay at `0.2.0.0` with Debug enabled for day-to-day development.
+- Workspace plugin may stay at `1.0.0.0` with Debug enabled for day-to-day development; the pack script stages a copy with Debug disabled.

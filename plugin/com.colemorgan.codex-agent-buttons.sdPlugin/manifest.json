@@ -2,8 +2,9 @@
   "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
   "UUID": "com.colemorgan.codex-agent-buttons",
   "Name": "Codex Agent Buttons",
-  "Version": "0.2.0.0",
+  "Version": "1.0.0.0",
   "Author": "Cole Morgan",
+  "URL": "https://github.com/colemorgan/streamdeck-agentbuttons",
   "Actions": [
     {
       "Name": "Agent Slot",

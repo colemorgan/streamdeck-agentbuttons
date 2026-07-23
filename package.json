@@ -1,8 +1,20 @@
 {
   "name": "streamdeck-agentbuttons",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Stream Deck Marketplace plugin + macOS companion for ChatGPT Codex agent status keys",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/colemorgan/streamdeck-agentbuttons.git"
+  },
+  "keywords": [
+    "streamdeck",
+    "elgato",
+    "plugin",
+    "chatgpt",
+    "codex",
+    "macos"
+  ],
   "workspaces": [
     "packages/*",
     "companion",
