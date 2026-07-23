@@ -1,7 +1,8 @@
-import {
+import streamDeck, {
   action,
   type DidReceiveSettingsEvent,
   type KeyDownEvent,
+  type SendToPluginEvent,
   SingletonAction,
   type WillAppearEvent,
   type WillDisappearEvent,
@@ -12,7 +13,7 @@ import type { AgentState } from "../render/agent-state.js";
 import { stateImageDataUrl } from "../render/state-image.js";
 
 export type AgentSlotSettings = {
-  slot?: number;
+  slot?: number | string;
 };
 
 export type InstanceState = {
@@ -38,7 +39,6 @@ export function normalizeSlot(raw: number | string | undefined | null): number {
 
 /**
  * Update (or create) the instance for a key when it appears or PI settings change.
- * Rebinds which Micro agent slot this key follows and picks state from lastStatus.
  */
 export function applySlotSettings(
   instances: Map<string, InstanceState>,
@@ -64,9 +64,7 @@ export function applySlotSettings(
 export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
   private ipc: CompanionIpcClient | null = null;
   private connected = false;
-  /** context → instance */
   private instances = new Map<string, InstanceState>();
-  /** Latest status per Micro slot (0–5), from companion IPC */
   private lastStatusBySlot = new Map<number, AgentState>();
 
   private ensureIpc(): CompanionIpcClient {
@@ -80,7 +78,6 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
             void this.paint(ctx, inst);
           }
         } else {
-          // Re-apply last known statuses when companion comes back
           for (const [ctx, inst] of this.instances) {
             const known = this.lastStatusBySlot.get(inst.slot);
             inst.state = known ?? "off";
@@ -106,32 +103,80 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
     ev: WillAppearEvent<AgentSlotSettings>,
   ): Promise<void> {
     this.ensureIpc();
+    const slot = normalizeSlot(ev.payload.settings?.slot);
+    streamDeck.logger.info(
+      `willAppear ctx=${ev.action.id} settings.slot=${JSON.stringify(ev.payload.settings)} → ${slot}`,
+    );
     const inst = applySlotSettings(
       this.instances,
       ev.action.id,
-      ev.payload.settings.slot,
+      slot,
       this.connected,
       this.lastStatusBySlot,
     );
+    // Ensure settings always contain a numeric slot
+    await ev.action.setSettings({ slot });
     await this.paint(ev.action.id, inst);
   }
 
-  /**
-   * Property inspector changed settings (e.g. slot select).
-   * Must rebind instances.Map — otherwise keys keep the willAppear-time slot.
-   */
   override async onDidReceiveSettings(
     ev: DidReceiveSettingsEvent<AgentSlotSettings>,
   ): Promise<void> {
     this.ensureIpc();
+    const slot = normalizeSlot(ev.payload.settings?.slot);
+    streamDeck.logger.info(
+      `didReceiveSettings ctx=${ev.action.id} slot=${slot} raw=${JSON.stringify(ev.payload.settings)}`,
+    );
     const inst = applySlotSettings(
       this.instances,
       ev.action.id,
-      ev.payload.settings.slot,
+      slot,
       this.connected,
       this.lastStatusBySlot,
     );
     await this.paint(ev.action.id, inst);
+    // Confirm back to PI
+    if (ev.action.isKey()) {
+      await ev.action.sendToPropertyInspector({
+        message: `Plugin bound Slot ${slot + 1}`,
+        settings: { slot },
+      });
+    }
+  }
+
+  /**
+   * PI also sends sendToPlugin so slot changes work even if setSettings fails.
+   */
+  override async onSendToPlugin(
+    ev: SendToPluginEvent<
+      { event?: string; slot?: number | string },
+      AgentSlotSettings
+    >,
+  ): Promise<void> {
+    this.ensureIpc();
+    const payload = ev.payload;
+    if (!payload || payload.event !== "setSlot") return;
+
+    const slot = normalizeSlot(payload.slot);
+    streamDeck.logger.info(
+      `sendToPlugin setSlot ctx=${ev.action.id} slot=${slot}`,
+    );
+
+    await ev.action.setSettings({ slot });
+    const inst = applySlotSettings(
+      this.instances,
+      ev.action.id,
+      slot,
+      this.connected,
+      this.lastStatusBySlot,
+    );
+    await this.paint(ev.action.id, inst);
+    if (ev.action.isKey()) {
+      await ev.action.sendToPropertyInspector({
+        message: `Plugin bound Slot ${slot + 1}`,
+        settings: { slot },
+      });
+    }
   }
 
   override onWillDisappear(
@@ -143,12 +188,12 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
   override async onKeyDown(
     ev: KeyDownEvent<AgentSlotSettings>,
   ): Promise<void> {
-    // Prefer live instance map (stays in sync after PI changes); fall back to event settings
     const fromMap = this.instances.get(ev.action.id)?.slot;
     const slot =
       fromMap !== undefined
         ? fromMap
-        : normalizeSlot(ev.payload.settings.slot);
+        : normalizeSlot(ev.payload.settings?.slot);
+    streamDeck.logger.info(`keyDown ctx=${ev.action.id} focus slot=${slot}`);
     const ipc = this.ensureIpc();
     const ok = ipc.focus(slot);
     if (!ok) {
@@ -157,13 +202,28 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
   }
 
   private async paint(contextId: string, inst: InstanceState): Promise<void> {
-    const action = this.actions.find((a) => a.id === contextId);
-    if (!action || !action.isKey()) return;
-    // Show slot number so PI changes are visually obvious
+    // Prefer lookup by id; also try iterating all visible actions of this type
+    let keyAction = this.actions.find((a) => a.id === contextId);
+    if (!keyAction) {
+      for (const a of this.actions) {
+        if (a.id === contextId) {
+          keyAction = a;
+          break;
+        }
+      }
+    }
+    if (!keyAction || !keyAction.isKey()) {
+      streamDeck.logger.warn(`paint: no key action for ${contextId}`);
+      return;
+    }
+
     const label = `A${inst.slot + 1}`;
-    const title =
-      inst.state === "offline" ? `${label}\noffline` : `${label}\n${inst.state}`;
-    await action.setImage(stateImageDataUrl(inst.state, label));
-    await action.setTitle(title);
+    // Bake slot into image (UserTitleEnabled is false in manifest)
+    await keyAction.setImage(stateImageDataUrl(inst.state, label));
+    // Also try title in case user enabled titles
+    await keyAction.setTitle(`${label}\n${inst.state}`);
+    streamDeck.logger.info(
+      `paint ctx=${contextId} ${label} state=${inst.state}`,
+    );
   }
 }

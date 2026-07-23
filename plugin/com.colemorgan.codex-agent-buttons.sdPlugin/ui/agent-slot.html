@@ -2,6 +2,10 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <meta
+      http-equiv="Cache-Control"
+      content="no-cache, no-store, must-revalidate"
+    />
     <title>Agent Slot</title>
     <style>
       body {
@@ -16,25 +20,36 @@
         margin-bottom: 6px;
         font-weight: 600;
       }
-      select {
+      select,
+      button {
         width: 100%;
+        box-sizing: border-box;
         margin-top: 4px;
-        padding: 6px 8px;
+        padding: 8px;
         border-radius: 6px;
         border: 1px solid #555;
         background: #2a2a2a;
         color: #eee;
       }
-      p.help {
-        margin-top: 12px;
-        opacity: 0.75;
-        line-height: 1.4;
-        font-size: 12px;
+      button {
+        margin-top: 10px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      button:hover {
+        background: #3a3a3a;
       }
       #status {
-        margin-top: 8px;
-        font-size: 11px;
-        opacity: 0.6;
+        margin-top: 10px;
+        font-size: 12px;
+        opacity: 0.85;
+        min-height: 1.2em;
+      }
+      p.help {
+        margin-top: 12px;
+        opacity: 0.7;
+        line-height: 1.4;
+        font-size: 12px;
       }
     </style>
   </head>
@@ -48,56 +63,74 @@
       <option value="4">Slot 5 (AG04)</option>
       <option value="5">Slot 6 (AG05)</option>
     </select>
-    <p id="status">Connecting…</p>
+    <button type="button" id="apply">Apply slot</button>
+    <div id="status">Waiting for Stream Deck…</div>
     <p class="help">
-      Matches Codex Micro agent keys 1–6. Live colors require the companion
-      (<code>--chatgpt</code>). Changing this rebinds which agent this key follows.
+      Slot 1–6 maps to Codex Micro agent keys. Use Apply if the dropdown alone
+      does not update the key face (label A1–A6).
     </p>
     <script>
-      /**
-       * Stream Deck PI protocol:
-       * connectElgatoStreamDeckSocket(port, uuid, registerEvent, info, actionInfo)
-       * setSettings requires: event, action, context, payload
-       */
       (function () {
-        let websocket = null;
-        let uuid = "";
-        let actionUUID = "";
-        let context = "";
-        const select = document.getElementById("slot");
-        const statusEl = document.getElementById("status");
+        var websocket = null;
+        var pluginUUID = "";
+        var actionUUID = "";
+        var context = "";
+        var select = document.getElementById("slot");
+        var statusEl = document.getElementById("status");
+        var applyBtn = document.getElementById("apply");
 
         function setStatus(msg) {
-          if (statusEl) statusEl.textContent = msg;
+          statusEl.textContent = msg;
         }
 
         function coerceSlot(raw) {
-          const n = typeof raw === "string" ? Number(raw) : raw;
-          if (typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 5)
+          var n = typeof raw === "string" ? parseInt(raw, 10) : raw;
+          if (typeof n === "number" && isFinite(n) && n >= 0 && n <= 5 && n === (n | 0))
             return n;
           return 0;
         }
 
         function applySettings(settings) {
-          const slot = coerceSlot(settings && settings.slot);
+          var slot = coerceSlot(settings && settings.slot);
           select.value = String(slot);
-          setStatus("Bound to Slot " + (slot + 1));
+          setStatus("Current: Slot " + (slot + 1) + " (A" + (slot + 1) + ")");
+        }
+
+        function send(obj) {
+          if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+            setStatus("Not connected — reopen this key’s settings");
+            return false;
+          }
+          websocket.send(JSON.stringify(obj));
+          return true;
         }
 
         function saveSlot() {
-          if (!websocket || websocket.readyState !== WebSocket.OPEN) {
-            setStatus("Not connected to Stream Deck");
+          var slot = coerceSlot(select.value);
+          if (!actionUUID || !context) {
+            setStatus("Missing action/context — reopen property inspector");
             return;
           }
-          const slot = coerceSlot(select.value);
-          const msg = {
+
+          // 1) Official settings persistence (triggers didReceiveSettings on plugin)
+          var ok1 = send({
             event: "setSettings",
             action: actionUUID,
             context: context,
             payload: { slot: slot },
-          };
-          websocket.send(JSON.stringify(msg));
-          setStatus("Saved Slot " + (slot + 1));
+          });
+
+          // 2) Direct plugin message (belt-and-suspenders)
+          var ok2 = send({
+            event: "sendToPlugin",
+            action: actionUUID,
+            context: context,
+            payload: { event: "setSlot", slot: slot },
+          });
+
+          if (ok1 || ok2) {
+            setStatus("Applied Slot " + (slot + 1) + " — check key face A" + (slot + 1));
+          }
         }
 
         window.connectElgatoStreamDeckSocket = function (
@@ -107,34 +140,43 @@
           inInfo,
           inActionInfo,
         ) {
-          uuid = inUUID;
-          let actionInfo = {};
+          pluginUUID = inUUID;
+          var actionInfo = {};
           try {
             actionInfo = JSON.parse(inActionInfo);
           } catch (e) {
-            setStatus("Bad actionInfo");
+            setStatus("Failed to parse actionInfo");
             return;
           }
+
           actionUUID = actionInfo.action || "";
           context = actionInfo.context || "";
-          applySettings((actionInfo.payload && actionInfo.payload.settings) || {});
+          applySettings(
+            (actionInfo.payload && actionInfo.payload.settings) || {},
+          );
+
+          setStatus(
+            "action=" +
+              (actionUUID ? "ok" : "MISSING") +
+              " ctx=" +
+              (context ? "ok" : "MISSING"),
+          );
 
           websocket = new WebSocket("ws://127.0.0.1:" + inPort);
+
           websocket.onopen = function () {
-            websocket.send(
-              JSON.stringify({ event: inRegisterEvent, uuid: inUUID }),
-            );
-            // Ask plugin for current settings (fresh)
-            websocket.send(
-              JSON.stringify({
-                event: "getSettings",
-                context: context,
-              }),
-            );
-            setStatus("Connected — pick a slot");
+            send({ event: inRegisterEvent, uuid: inUUID });
+            // getSettings requires both action + context
+            send({
+              event: "getSettings",
+              action: actionUUID,
+              context: context,
+            });
+            setStatus("Connected. Pick a slot, then Apply.");
           };
+
           websocket.onmessage = function (evt) {
-            let data;
+            var data;
             try {
               data = JSON.parse(evt.data);
             } catch (e) {
@@ -147,12 +189,18 @@
             ) {
               applySettings(data.payload.settings);
             }
+            if (data.event === "sendToPropertyInspector" && data.payload) {
+              if (data.payload.settings) applySettings(data.payload.settings);
+              if (data.payload.message) setStatus(String(data.payload.message));
+            }
           };
+
           websocket.onerror = function () {
             setStatus("WebSocket error");
           };
 
           select.addEventListener("change", saveSlot);
+          applyBtn.addEventListener("click", saveSlot);
         };
       })();
     </script>

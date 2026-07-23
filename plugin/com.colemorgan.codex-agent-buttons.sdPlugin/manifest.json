@@ -11,7 +11,7 @@
       "Icon": "imgs/actions/agent-slot/icon",
       "Tooltip": "Live Codex agent status key (requires companion)",
       "Controllers": ["Keypad"],
-      "UserTitleEnabled": false,
+      "UserTitleEnabled": true,
       "PropertyInspectorPath": "ui/agent-slot.html",
       "States": [
         {
