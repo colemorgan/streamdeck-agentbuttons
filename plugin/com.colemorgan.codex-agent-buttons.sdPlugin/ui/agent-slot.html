@@ -2,7 +2,10 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta
+      http-equiv="Cache-Control"
+      content="no-cache, no-store, must-revalidate"
+    />
     <title>Agent Slot</title>
     <style>
       body {
@@ -12,79 +15,206 @@
         margin: 12px;
         background: transparent;
       }
+      h2 {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        opacity: 0.7;
+        margin: 14px 0 8px;
+        font-weight: 600;
+      }
+      h2:first-child {
+        margin-top: 0;
+      }
       label {
         display: block;
-        margin-bottom: 6px;
+        margin-bottom: 4px;
         font-weight: 600;
       }
       select,
-      button {
+      input[type="text"] {
         width: 100%;
         box-sizing: border-box;
         margin-top: 4px;
+        margin-bottom: 10px;
         padding: 8px;
         border-radius: 6px;
         border: 1px solid #555;
         background: #2a2a2a;
         color: #eee;
       }
-      button {
-        margin-top: 10px;
-        cursor: pointer;
-        font-weight: 600;
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        border-bottom: 1px solid #333;
+        font-size: 12px;
       }
-      button:hover {
-        background: #3a3a3a;
+      .row:last-child {
+        border-bottom: none;
+      }
+      .badge {
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+      }
+      .ok {
+        background: #1b5e20;
+        color: #c8e6c9;
+      }
+      .warn {
+        background: #e65100;
+        color: #ffe0b2;
+      }
+      .bad {
+        background: #424242;
+        color: #bdbdbd;
+      }
+      .help {
+        margin-top: 8px;
+        opacity: 0.75;
+        line-height: 1.45;
+        font-size: 12px;
+      }
+      .help a {
+        color: #8ab4ff;
+      }
+      .footer {
+        margin-top: 16px;
+        padding-top: 10px;
+        border-top: 1px solid #333;
+        font-size: 11px;
+        opacity: 0.55;
+        line-height: 1.4;
       }
       #status {
-        margin-top: 10px;
+        margin-top: 6px;
         font-size: 12px;
-        opacity: 0.9;
+        opacity: 0.85;
         min-height: 1.2em;
       }
-      p.help {
-        margin-top: 12px;
-        opacity: 0.7;
-        line-height: 1.4;
+      .checklist {
+        margin: 8px 0 0;
+        padding-left: 18px;
+        opacity: 0.8;
         font-size: 12px;
+        line-height: 1.5;
       }
     </style>
   </head>
   <body>
+    <h2>Connection</h2>
+    <div class="row">
+      <span>Companion</span>
+      <span id="companionBadge" class="badge bad">Unknown</span>
+    </div>
+    <div class="row">
+      <span>ChatGPT Micro</span>
+      <span id="chatgptBadge" class="badge bad">Unknown</span>
+    </div>
+
+    <h2>This key</h2>
     <label for="slot">Agent slot</label>
     <select id="slot">
-      <option value="0">Slot 1 (AG00)</option>
-      <option value="1">Slot 2 (AG01)</option>
-      <option value="2">Slot 3 (AG02)</option>
-      <option value="3">Slot 4 (AG03)</option>
-      <option value="4">Slot 5 (AG04)</option>
-      <option value="5">Slot 6 (AG05)</option>
+      <option value="0">Slot 1</option>
+      <option value="1">Slot 2</option>
+      <option value="2">Slot 3</option>
+      <option value="3">Slot 4</option>
+      <option value="4">Slot 5</option>
+      <option value="5">Slot 6</option>
     </select>
-    <button type="button" id="apply">Apply slot</button>
+
+    <label for="customLabel">Display name (optional)</label>
+    <input
+      id="customLabel"
+      type="text"
+      maxlength="10"
+      placeholder="e.g. Ship"
+      autocomplete="off"
+    />
+
     <div id="status">Waiting for Stream Deck…</div>
+
+    <h2>Assign a chat to this slot</h2>
     <p class="help">
-      Slot 1–6 = Codex Micro agent keys. After Apply, the key face should
-      show A1–A6. Companion must be running for live colors.
+      Stream Deck only picks which <strong>agent slot</strong> (1–6) this key
+      is. Which <strong>thread</strong> lives on that slot is set in
+      <strong>ChatGPT → Codex Micro → Agent keys</strong> — not here.
     </p>
+
+    <h2>Setup checklist</h2>
+    <ol class="checklist">
+      <li>Install &amp; start Agent Buttons Companion</li>
+      <li>In companion: Launch ChatGPT with agent keys</li>
+      <li>In ChatGPT: Codex Micro shows Connected</li>
+      <li>Assign chats to agent keys in ChatGPT</li>
+      <li>Match slots above to those keys</li>
+    </ol>
+    <p class="help">
+      Docs:
+      <a
+        href="https://github.com/colemorgan/streamdeck-agentbuttons/blob/main/docs/user/setup.md"
+        >Setup guide</a
+      >
+      ·
+      <a
+        href="https://github.com/colemorgan/streamdeck-agentbuttons/blob/main/docs/user/companion-install.md"
+        >Companion install</a
+      >
+      ·
+      <a
+        href="https://github.com/colemorgan/streamdeck-agentbuttons/releases"
+        >Releases</a
+      >
+    </p>
+
+    <div class="footer">
+      Codex Agent Buttons · macOS only<br />
+      Not affiliated with OpenAI, Work Louder, or Elgato.
+    </div>
+
     <script>
-      /**
-       * Stream Deck PI: setSettings/getSettings/sendToPlugin must use the
-       * Property Inspector UUID (2nd arg to connectElgatoStreamDeckSocket)
-       * as `context` — NOT actionInfo.context. Using the action context
-       * yields: "setSettings from the wrong context".
-       */
       (function () {
         var websocket = null;
-        // PI registration UUID (INCONTEXT) — required for setSettings
         var piUUID = "";
         var actionUUID = "";
         var actionContext = "";
         var select = document.getElementById("slot");
+        var labelInput = document.getElementById("customLabel");
         var statusEl = document.getElementById("status");
-        var applyBtn = document.getElementById("apply");
+        var companionBadge = document.getElementById("companionBadge");
+        var chatgptBadge = document.getElementById("chatgptBadge");
+        var saveTimer = null;
 
         function setStatus(msg) {
           statusEl.textContent = msg;
+        }
+
+        function setBadge(el, text, kind) {
+          el.textContent = text;
+          el.className = "badge " + kind;
+        }
+
+        function applyHealth(h) {
+          if (!h) return;
+          var comp = (h.companion || "").toLowerCase();
+          var cg = (h.chatgpt || "").toLowerCase();
+          if (comp === "up" || h.connected === true) {
+            setBadge(companionBadge, "Connected", "ok");
+          } else {
+            setBadge(companionBadge, "Not running", "bad");
+          }
+          if (cg === "connected") {
+            setBadge(chatgptBadge, "Connected", "ok");
+          } else if (cg === "waiting" || cg === "waiting-for-chatgpt") {
+            setBadge(chatgptBadge, "Waiting", "warn");
+          } else if (comp === "up" || h.connected === true) {
+            setBadge(chatgptBadge, "Waiting", "warn");
+          } else {
+            setBadge(chatgptBadge, "Unknown", "bad");
+          }
         }
 
         function coerceSlot(raw) {
@@ -103,7 +233,16 @@
         function applySettings(settings) {
           var slot = coerceSlot(settings && settings.slot);
           select.value = String(slot);
-          setStatus("Current: Slot " + (slot + 1) + " (A" + (slot + 1) + ")");
+          var lab =
+            settings && settings.customLabel
+              ? String(settings.customLabel)
+              : "";
+          labelInput.value = lab;
+          setStatus(
+            "Slot " +
+              (slot + 1) +
+              (lab ? ' · "' + lab + '"' : " · face A" + (slot + 1)),
+          );
         }
 
         function send(obj) {
@@ -115,38 +254,46 @@
           return true;
         }
 
-        function saveSlot() {
+        function saveSettings() {
           var slot = coerceSlot(select.value);
+          var customLabel = (labelInput.value || "").trim();
           if (!piUUID) {
             setStatus("Missing PI UUID — reopen property inspector");
             return;
           }
 
-          // Context MUST be the Property Inspector UUID (piUUID), not actionContext
-          var ok1 = send({
+          var payload = { slot: slot };
+          if (customLabel) payload.customLabel = customLabel;
+
+          send({
             event: "setSettings",
             context: piUUID,
-            payload: { slot: slot },
+            payload: payload,
           });
 
-          // Optional: also notify plugin directly (context = action instance)
           if (actionUUID && actionContext) {
             send({
               event: "sendToPlugin",
               action: actionUUID,
               context: actionContext,
-              payload: { event: "setSlot", slot: slot },
+              payload: {
+                event: "setSettings",
+                slot: slot,
+                customLabel: customLabel,
+              },
             });
           }
 
-          if (ok1) {
-            setStatus(
-              "Saved Slot " +
-                (slot + 1) +
-                " — key should show A" +
-                (slot + 1),
-            );
-          }
+          setStatus(
+            "Saved Slot " +
+              (slot + 1) +
+              (customLabel ? ' · "' + customLabel + '"' : ""),
+          );
+        }
+
+        function scheduleSave() {
+          if (saveTimer) clearTimeout(saveTimer);
+          saveTimer = setTimeout(saveSettings, 200);
         }
 
         window.connectElgatoStreamDeckSocket = function (
@@ -156,7 +303,6 @@
           inInfo,
           inActionInfo,
         ) {
-          // THIS is the context Stream Deck accepts for setSettings from the PI
           piUUID = inPropertyInspectorUUID;
 
           var actionInfo = {};
@@ -176,14 +322,17 @@
           websocket = new WebSocket("ws://127.0.0.1:" + inPort);
 
           websocket.onopen = function () {
-            // Register PI session with PI UUID
             send({ event: inRegisterEvent, uuid: piUUID });
-            // getSettings also uses PI UUID as context
-            send({
-              event: "getSettings",
-              context: piUUID,
-            });
-            setStatus("Connected. Pick a slot, then Apply.");
+            send({ event: "getSettings", context: piUUID });
+            if (actionUUID && actionContext) {
+              send({
+                event: "sendToPlugin",
+                action: actionUUID,
+                context: actionContext,
+                payload: { event: "requestHealth" },
+              });
+            }
+            setStatus("Connected. Changes auto-save.");
           };
 
           websocket.onmessage = function (evt) {
@@ -201,8 +350,12 @@
               applySettings(data.payload.settings);
             }
             if (data.event === "sendToPropertyInspector" && data.payload) {
-              if (data.payload.settings) applySettings(data.payload.settings);
-              if (data.payload.message) setStatus(String(data.payload.message));
+              var p = data.payload;
+              if (p.settings) applySettings(p.settings);
+              if (p.event === "health" || p.companion || p.chatgpt) {
+                applyHealth(p);
+              }
+              if (p.message) setStatus(String(p.message));
             }
           };
 
@@ -210,8 +363,9 @@
             setStatus("WebSocket error");
           };
 
-          select.addEventListener("change", saveSlot);
-          applyBtn.addEventListener("click", saveSlot);
+          select.addEventListener("change", saveSettings);
+          labelInput.addEventListener("input", scheduleSave);
+          labelInput.addEventListener("change", saveSettings);
         };
       })();
     </script>

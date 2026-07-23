@@ -45,6 +45,16 @@ npm run build -w @agentbuttons/plugin
 
 ### Companion
 
+**Menu bar app (recommended):**
+
+```bash
+./companion/scripts/build-macos-app.sh
+open "companion/dist/macos/Agent Buttons Companion.app"
+# Start Bridge → Launch ChatGPT with Agent Keys
+```
+
+**CLI:**
+
 ```bash
 # Demo status only (no ChatGPT)
 node companion/dist/cli.js --verbose --demo
@@ -55,6 +65,8 @@ node companion/dist/cli.js --verbose --chatgpt
 chmod +x companion/scripts/launch-chatgpt.sh
 ./companion/scripts/launch-chatgpt.sh
 ```
+
+Install notes: [docs/user/companion-install.md](docs/user/companion-install.md)
 
 ### Plugin
 
@@ -67,6 +79,16 @@ npm run build -w @agentbuttons/plugin
 Plugin UUID: `com.colemorgan.codex-agent-buttons`  
 Action: **Agent Slot** (`slot` 0–5 → Micro `AG00`–`AG05`)
 
+### Release pack (local)
+
+```bash
+npm test
+npm run plugin:pack          # → dist/release/*.streamDeckPlugin (v1.0.0.0, Debug off)
+npm run companion:app        # → companion/dist/macos/Agent Buttons Companion.app
+```
+
+Double-click the `.streamDeckPlugin` to install. Companion is **not** inside the plugin package.
+
 ## Repo layout
 
 | Path | Role |
@@ -78,8 +100,10 @@ Action: **Agent Slot** (`slot` 0–5 → Micro `AG00`–`AG05`)
 
 ## Docs
 
+- **User setup:** [docs/user/setup.md](docs/user/setup.md) · [troubleshooting](docs/user/troubleshooting.md)
+- Profiles: [profiles/README.md](profiles/README.md)
 - Requirements: `docs/brainstorms/2026-07-22-streamdeck-codex-agent-buttons-requirements.md`
-- Plan: `docs/plans/2026-07-22-001-feat-streamdeck-codex-agent-buttons-plan.md`
+- Execution plan: `docs/plans/2026-07-23-003-feat-marketplace-polish-completion-plan.md`
 - Companion: `companion/README.md`
 
 ## License

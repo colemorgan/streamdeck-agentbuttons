@@ -2,6 +2,7 @@ import streamDeck, {
   action,
   type DidReceiveSettingsEvent,
   type KeyDownEvent,
+  type PropertyInspectorDidAppearEvent,
   type SendToPluginEvent,
   SingletonAction,
   type WillAppearEvent,
@@ -10,14 +11,20 @@ import streamDeck, {
 
 import { CompanionIpcClient } from "../ipc-client.js";
 import type { AgentState } from "../render/agent-state.js";
-import { stateImageDataUrl } from "../render/state-image.js";
+import {
+  facePrimaryLabel,
+  normalizeCustomLabel,
+  stateImageDataUrl,
+} from "../render/state-image.js";
 
 export type AgentSlotSettings = {
   slot?: number | string;
+  customLabel?: string;
 };
 
 export type InstanceState = {
   slot: number;
+  customLabel?: string;
   state: AgentState | "offline";
 };
 
@@ -46,16 +53,23 @@ export function applySlotSettings(
   rawSlot: number | string | undefined | null,
   connected: boolean,
   lastStatusBySlot: ReadonlyMap<number, AgentState>,
+  rawCustomLabel?: string | null,
 ): InstanceState {
   const slot = normalizeSlot(rawSlot);
+  const customLabel = normalizeCustomLabel(rawCustomLabel);
   const known = lastStatusBySlot.get(slot);
   const state: AgentState | "offline" = !connected
     ? "offline"
     : (known ?? "off");
-  const inst: InstanceState = { slot, state };
+  const inst: InstanceState = { slot, customLabel, state };
   instances.set(contextId, inst);
   return inst;
 }
+
+export type HealthSnapshot = {
+  companion: string;
+  chatgpt: string;
+};
 
 /**
  * One physical key mapped to a Codex Micro agent slot (0–5).
@@ -66,34 +80,55 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
   private connected = false;
   private instances = new Map<string, InstanceState>();
   private lastStatusBySlot = new Map<number, AgentState>();
+  private health: HealthSnapshot = {
+    companion: "down",
+    chatgpt: "unknown",
+  };
 
   private ensureIpc(): CompanionIpcClient {
     if (this.ipc) return this.ipc;
     this.ipc = new CompanionIpcClient({
-      onLog: (msg) => streamDeck.logger.info(msg),
+      onLog: (msg) => streamDeck.logger.debug(msg),
       onConnection: (ok) => {
         this.connected = ok;
         streamDeck.logger.info(`ipc connection=${ok}`);
         if (!ok) {
+          this.health = { companion: "down", chatgpt: "unknown" };
           for (const [ctx, inst] of this.instances) {
             inst.state = "offline";
             void this.paint(ctx, inst);
           }
         } else {
-          // Immediately reflect any cached status, then live updates follow
+          this.health = {
+            companion: "up",
+            chatgpt: this.health.chatgpt === "unknown" ? "waiting" : this.health.chatgpt,
+          };
           for (const [ctx, inst] of this.instances) {
             const known = this.lastStatusBySlot.get(inst.slot);
             inst.state = known ?? "off";
             void this.paint(ctx, inst);
           }
         }
+        void this.pushHealthToPi();
+      },
+      onHealth: (chatgpt, companion) => {
+        this.health = {
+          companion: companion || (this.connected ? "up" : "down"),
+          chatgpt: chatgpt || "unknown",
+        };
+        if (companion === "up" || chatgpt) {
+          this.connected = true;
+        }
+        streamDeck.logger.debug(
+          `ipc health companion=${this.health.companion} chatgpt=${this.health.chatgpt}`,
+        );
+        void this.pushHealthToPi();
       },
       onStatus: (slot, state) => {
         this.lastStatusBySlot.set(slot, state);
-        streamDeck.logger.info(`ipc status slot=${slot} state=${state}`);
+        streamDeck.logger.debug(`ipc status slot=${slot} state=${state}`);
         for (const [ctx, inst] of this.instances) {
           if (inst.slot === slot) {
-            // Don't require connected flag race: status implies companion up
             this.connected = true;
             inst.state = state;
             void this.paint(ctx, inst);
@@ -105,13 +140,34 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
     return this.ipc;
   }
 
+  private async pushHealthToPi(): Promise<void> {
+    try {
+      await streamDeck.ui.sendToPropertyInspector({
+        event: "health",
+        companion: this.health.companion,
+        chatgpt: this.health.chatgpt,
+        connected: this.connected,
+      });
+    } catch {
+      /* PI may not be open */
+    }
+  }
+
+  override async onPropertyInspectorDidAppear(
+    _ev: PropertyInspectorDidAppearEvent<AgentSlotSettings>,
+  ): Promise<void> {
+    this.ensureIpc();
+    await this.pushHealthToPi();
+  }
+
   override async onWillAppear(
     ev: WillAppearEvent<AgentSlotSettings>,
   ): Promise<void> {
     this.ensureIpc();
     const slot = normalizeSlot(ev.payload.settings?.slot);
-    streamDeck.logger.info(
-      `willAppear ctx=${ev.action.id} settings.slot=${JSON.stringify(ev.payload.settings)} → ${slot}`,
+    const customLabel = normalizeCustomLabel(ev.payload.settings?.customLabel);
+    streamDeck.logger.debug(
+      `willAppear ctx=${ev.action.id} slot=${slot} label=${customLabel ?? ""}`,
     );
     const inst = applySlotSettings(
       this.instances,
@@ -119,9 +175,11 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
       slot,
       this.connected,
       this.lastStatusBySlot,
+      customLabel,
     );
-    // Ensure settings always contain a numeric slot
-    await ev.action.setSettings({ slot });
+    const settings: AgentSlotSettings = { slot };
+    if (customLabel) settings.customLabel = customLabel;
+    await ev.action.setSettings(settings);
     await this.paint(ev.action.id, inst);
   }
 
@@ -130,8 +188,9 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
   ): Promise<void> {
     this.ensureIpc();
     const slot = normalizeSlot(ev.payload.settings?.slot);
-    streamDeck.logger.info(
-      `didReceiveSettings ctx=${ev.action.id} slot=${slot} raw=${JSON.stringify(ev.payload.settings)}`,
+    const customLabel = normalizeCustomLabel(ev.payload.settings?.customLabel);
+    streamDeck.logger.debug(
+      `didReceiveSettings ctx=${ev.action.id} slot=${slot} label=${customLabel ?? ""}`,
     );
     const inst = applySlotSettings(
       this.instances,
@@ -139,35 +198,51 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
       slot,
       this.connected,
       this.lastStatusBySlot,
+      customLabel,
     );
     await this.paint(ev.action.id, inst);
   }
 
   /**
-   * PI also sends sendToPlugin so slot changes work even if setSettings fails.
+   * PI sends sendToPlugin for setSlot / setLabel / requestHealth.
    */
   override async onSendToPlugin(
     ev: SendToPluginEvent<
-      { event?: string; slot?: number | string },
+      {
+        event?: string;
+        slot?: number | string;
+        customLabel?: string;
+      },
       AgentSlotSettings
     >,
   ): Promise<void> {
     this.ensureIpc();
     const payload = ev.payload;
-    if (!payload || payload.event !== "setSlot") return;
+    if (!payload || typeof payload !== "object") return;
+
+    if (payload.event === "requestHealth") {
+      await this.pushHealthToPi();
+      return;
+    }
+
+    if (payload.event !== "setSlot" && payload.event !== "setSettings") return;
 
     const slot = normalizeSlot(payload.slot);
-    streamDeck.logger.info(
-      `sendToPlugin setSlot ctx=${ev.action.id} slot=${slot}`,
+    const customLabel = normalizeCustomLabel(payload.customLabel);
+    streamDeck.logger.debug(
+      `sendToPlugin ${payload.event} ctx=${ev.action.id} slot=${slot}`,
     );
 
-    await ev.action.setSettings({ slot });
+    const settings: AgentSlotSettings = { slot };
+    if (customLabel) settings.customLabel = customLabel;
+    await ev.action.setSettings(settings);
     const inst = applySlotSettings(
       this.instances,
       ev.action.id,
       slot,
       this.connected,
       this.lastStatusBySlot,
+      customLabel,
     );
     await this.paint(ev.action.id, inst);
   }
@@ -186,7 +261,7 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
       fromMap !== undefined
         ? fromMap
         : normalizeSlot(ev.payload.settings?.slot);
-    streamDeck.logger.info(`keyDown ctx=${ev.action.id} focus slot=${slot}`);
+    streamDeck.logger.info(`keyDown focus slot=${slot}`);
     const ipc = this.ensureIpc();
     const ok = ipc.focus(slot);
     if (!ok) {
@@ -195,7 +270,6 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
   }
 
   private async paint(contextId: string, inst: InstanceState): Promise<void> {
-    // Prefer lookup by id; also try iterating all visible actions of this type
     let keyAction = this.actions.find((a) => a.id === contextId);
     if (!keyAction) {
       for (const a of this.actions) {
@@ -210,13 +284,17 @@ export class AgentSlotAction extends SingletonAction<AgentSlotSettings> {
       return;
     }
 
-    const label = `A${inst.slot + 1}`;
-    // Bake slot into image (UserTitleEnabled is false in manifest)
-    await keyAction.setImage(stateImageDataUrl(inst.state, label));
-    // Also try title in case user enabled titles
-    await keyAction.setTitle(`${label}\n${inst.state}`);
-    streamDeck.logger.info(
-      `paint ctx=${contextId} ${label} state=${inst.state}`,
+    await keyAction.setImage(
+      stateImageDataUrl({
+        state: inst.state,
+        slot: inst.slot,
+        customLabel: inst.customLabel,
+      }),
+    );
+    // Image owns the face — clear Stream Deck title to avoid double text
+    await keyAction.setTitle("");
+    streamDeck.logger.debug(
+      `paint ctx=${contextId} ${facePrimaryLabel(inst.slot, inst.customLabel)} state=${inst.state}`,
     );
   }
 }

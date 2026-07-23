@@ -5,7 +5,11 @@ import {
   type InstanceState,
 } from "./agent-slot.js";
 import type { AgentState } from "../render/agent-state.js";
-import { stateImageDataUrl } from "../render/state-image.js";
+import {
+  facePrimaryLabel,
+  normalizeCustomLabel,
+  stateImageDataUrl,
+} from "../render/state-image.js";
 
 /**
  * Simulates the shipped onWillAppear → onDidReceiveSettings path:
@@ -20,24 +24,40 @@ describe("applySlotSettings (PI / onDidReceiveSettings path)", () => {
     ]);
     const ctx = "key-context-1";
 
-    // willAppear with default / slot 0
     const first = applySlotSettings(instances, ctx, 0, true, lastStatus);
     expect(first.slot).toBe(0);
     expect(first.state).toBe("idle");
     expect(instances.get(ctx)?.slot).toBe(0);
 
-    // PI setSettings → onDidReceiveSettings with slot 3
     const second = applySlotSettings(instances, ctx, 3, true, lastStatus);
     expect(second.slot).toBe(3);
     expect(second.state).toBe("working");
     expect(instances.get(ctx)?.slot).toBe(3);
     expect(instances.get(ctx)?.state).toBe("working");
 
-    // Face for new slot label must reflect A4 and working color (not A1/idle)
-    const face = stateImageDataUrl(second.state, `A${second.slot + 1}`);
+    const face = stateImageDataUrl({
+      state: second.state,
+      slot: second.slot,
+    });
     expect(decodeURIComponent(face)).toContain("A4");
     expect(decodeURIComponent(face)).toContain("#304ffe");
     expect(decodeURIComponent(face)).not.toContain(">A1<");
+  });
+
+  it("stores customLabel on instance", () => {
+    const instances = new Map<string, InstanceState>();
+    const lastStatus = new Map<number, AgentState>();
+    const inst = applySlotSettings(
+      instances,
+      "c",
+      1,
+      true,
+      lastStatus,
+      "  Ship  ",
+    );
+    expect(inst.slot).toBe(1);
+    expect(inst.customLabel).toBe("Ship");
+    expect(facePrimaryLabel(inst.slot, inst.customLabel)).toBe("Ship");
   });
 
   it("shows offline when companion is down even after slot change", () => {
@@ -65,5 +85,9 @@ describe("applySlotSettings (PI / onDidReceiveSettings path)", () => {
     const inst = applySlotSettings(instances, "ctx", "2", true, lastStatus);
     expect(inst.slot).toBe(2);
     expect(inst.state).toBe("working");
+  });
+
+  it("clears empty custom labels", () => {
+    expect(normalizeCustomLabel("   ")).toBeUndefined();
   });
 });

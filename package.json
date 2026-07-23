@@ -13,7 +13,11 @@
     "build": "npm run build --workspaces --if-present",
     "test:protocol": "npm run test -w @agentbuttons/protocol",
     "companion": "npm run build -w @agentbuttons/protocol && npm run build -w @agentbuttons/companion && node companion/dist/cli.js",
-    "plugin:build": "npm run build -w @agentbuttons/plugin"
+    "companion:app": "bash companion/scripts/build-macos-app.sh",
+    "plugin:build": "npm run build -w @agentbuttons/plugin",
+    "plugin:pack": "bash plugin/scripts/pack-release.sh",
+    "plugin:icons": "bash plugin/scripts/generate-icons.sh",
+    "release:local": "npm test && npm run companion:app && npm run plugin:pack"
   },
   "engines": {
     "node": ">=20.5.1"

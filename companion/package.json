@@ -1,6 +1,6 @@
 {
   "name": "@agentbuttons/companion",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "bin": {
@@ -8,6 +8,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "bundle": "node scripts/bundle.mjs",
+    "build:app": "bash scripts/build-macos-app.sh",
     "start": "node dist/cli.js",
     "dev": "tsx src/cli.ts",
     "test": "vitest run"

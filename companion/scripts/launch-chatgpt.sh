@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 # Launch ChatGPT desktop with the agentbuttons HID shim so the app sees a
 # virtual Codex Micro. Companion must already be running with --chatgpt.
+#
+# Launch via Launch Services (`open --env`), not by exec'ing the binary.
+# Direct exec / polluted agent shells break macOS TCC (Input Monitoring
+# shows "Not granted") even though Dock launches of ChatGPT.app are fine.
+#
+# Critical: do NOT forward the caller environment into ChatGPT. Coding agents
+# often set ELECTRON_RUN_AS_NODE=1; if that reaches ChatGPT, Electron/Codex
+# behavior and Input Monitoring checks go wrong while the Micro shim may still
+# appear "Connected".
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,34 +28,54 @@ if [[ ! -d "$APP" ]]; then
   exit 1
 fi
 
-BINARY="$APP/Contents/MacOS/ChatGPT"
-if [[ ! -x "$BINARY" ]]; then
-  BINARY="$(find "$APP/Contents/MacOS" -type f -perm +111 2>/dev/null | head -1 || true)"
-fi
-if [[ -z "${BINARY:-}" || ! -x "$BINARY" ]]; then
-  echo "error: could not find ChatGPT executable under $APP" >&2
-  exit 1
-fi
+BUNDLE_ID="$(
+  defaults read "$APP/Contents/Info" CFBundleIdentifier 2>/dev/null || echo "com.openai.codex"
+)"
 
 echo "Stopping existing ChatGPT (if any)…"
 osascript -e 'tell application "ChatGPT" to quit' 2>/dev/null || true
 sleep 1
 killall ChatGPT 2>/dev/null || true
 sleep 1
+# Orphan bare-modifier-monitor processes from prior sessions
+while read -r pid; do
+  [[ -n "${pid:-}" ]] || continue
+  kill "$pid" 2>/dev/null || true
+done < <(pgrep -x bare-modifier-monitor 2>/dev/null || true)
+sleep 0.5
 
-export AGENTBUTTONS_SHIM_SOCKET="$SOCKET"
-export NODE_OPTIONS="--require ${PRELOAD}"
+# Only the vars ChatGPT needs for the shim. Never inherit ELECTRON_RUN_AS_NODE,
+# NODE_OPTIONS from the agent, or a developer shell PATH.
+CLEAN_HOME="${HOME}"
+CLEAN_USER="${USER}"
+CLEAN_LOGNAME="${LOGNAME:-$USER}"
+CLEAN_TMPDIR="${TMPDIR:-/tmp}"
+CLEAN_LANG="${LANG:-en_US.UTF-8}"
+CLEAN_PATH="/usr/bin:/bin:/usr/sbin:/sbin"
 
-echo "Starting ChatGPT with agentbuttons shim"
-echo "  binary: $BINARY"
-echo "  socket: $SOCKET"
-echo "  NODE_OPTIONS=$NODE_OPTIONS"
+echo "Starting ChatGPT via Launch Services (clean env + shim)"
+echo "  app:     $APP"
+echo "  bundle:  $BUNDLE_ID"
+echo "  socket:  $SOCKET"
+echo "  preload: $PRELOAD"
+echo "  stripped: ELECTRON_RUN_AS_NODE (and other agent env)"
 echo "Companion must be running: node companion/dist/cli.js --chatgpt --socket \"$SOCKET\""
 echo ""
 echo "In ChatGPT after it opens:"
-echo "  1. Open Codex / threads sidebar"
-echo "  2. Look for Codex Micro / Agent keys settings"
+echo "  1. Codex Micro → Connection should be Connected"
+echo "  2. Input Monitoring should stay granted (same as Dock launch)"
 echo "  3. Assign threads to agent keys (slots 1–6)"
-echo "  4. Match Stream Deck Agent Slot numbers to those keys"
 
-exec "$BINARY" "$@"
+# env -i: no agent pollution. open --env: only our shim variables.
+# -n: force a new instance so --env is applied.
+exec env -i \
+  HOME="$CLEAN_HOME" \
+  USER="$CLEAN_USER" \
+  LOGNAME="$CLEAN_LOGNAME" \
+  TMPDIR="$CLEAN_TMPDIR" \
+  LANG="$CLEAN_LANG" \
+  PATH="$CLEAN_PATH" \
+  /usr/bin/open -n -a "$APP" \
+    --env "AGENTBUTTONS_SHIM_SOCKET=${SOCKET}" \
+    --env "NODE_OPTIONS=--require ${PRELOAD}" \
+    "$@"

@@ -1,0 +1,65 @@
+name: Bug report
+description: Something broken with the plugin, companion, or ChatGPT link
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Fill in as much as you can — macOS + companion version matter a lot.
+  - type: input
+    id: os
+    attributes:
+      label: macOS version
+      placeholder: "e.g. 15.5 / 26.x"
+    validations:
+      required: true
+  - type: input
+    id: streamdeck
+    attributes:
+      label: Stream Deck Software + hardware
+      placeholder: "e.g. SD Software 7.x, Stream Deck XL"
+    validations:
+      required: true
+  - type: input
+    id: plugin_version
+    attributes:
+      label: Plugin version
+      placeholder: "manifest Version, e.g. 1.0.0.0"
+    validations:
+      required: true
+  - type: input
+    id: companion_version
+    attributes:
+      label: Companion version / how you run it
+      placeholder: "menu bar app 0.2.0 / CLI node companion/dist/cli.js"
+    validations:
+      required: true
+  - type: input
+    id: chatgpt
+    attributes:
+      label: ChatGPT desktop version (if known)
+      placeholder: "About ChatGPT / app build"
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Expected vs actual. Include whether Micro shows Connected / Input Monitoring.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs (redact secrets)
+      description: |
+        Paths:
+        - ~/Library/Logs/agentbuttons-companion.log
+        - $TMPDIR/agentbuttons-shim.log
+        - plugin .sdPlugin/logs/
+      render: shell

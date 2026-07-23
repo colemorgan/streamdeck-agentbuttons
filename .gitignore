@@ -6,8 +6,12 @@ dist/
 .sdPlugin/logs/
 plugin/com.colemorgan.codex-agent-buttons.sdPlugin/bin/
 plugin/com.colemorgan.codex-agent-buttons.sdPlugin/logs/
+companion/dist/
 coverage/
 .turbo/
 *.tsbuildinfo
 .env
 .env.*
+# local notarization / signing secrets
+*.p12
+AuthKey_*.p8

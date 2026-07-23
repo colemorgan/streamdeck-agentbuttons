@@ -1,11 +1,13 @@
 {
   "name": "@agentbuttons/plugin",
-  "version": "0.1.0.0",
+  "version": "0.2.0.0",
   "private": true,
   "scripts": {
     "build": "rollup -c",
     "watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.colemorgan.codex-agent-buttons\"",
-    "test": "vitest run"
+    "test": "vitest run",
+    "pack": "bash scripts/pack-release.sh",
+    "validate": "streamdeck validate com.colemorgan.codex-agent-buttons.sdPlugin --no-update-check"
   },
   "type": "module",
   "dependencies": {

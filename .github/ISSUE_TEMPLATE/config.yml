@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Setup guide
+    url: https://github.com/colemorgan/streamdeck-agentbuttons/blob/main/docs/user/setup.md
+    about: Cold-start install order (plugin + companion + ChatGPT)
+  - name: Troubleshooting
+    url: https://github.com/colemorgan/streamdeck-agentbuttons/blob/main/docs/user/troubleshooting.md
+    about: Common failure modes (offline keys, Input Monitoring, focus)
