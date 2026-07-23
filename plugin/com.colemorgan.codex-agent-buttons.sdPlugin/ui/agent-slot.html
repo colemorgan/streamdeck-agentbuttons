@@ -2,10 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <meta
-      http-equiv="Cache-Control"
-      content="no-cache, no-store, must-revalidate"
-    />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <title>Agent Slot</title>
     <style>
       body {
@@ -42,7 +39,7 @@
       #status {
         margin-top: 10px;
         font-size: 12px;
-        opacity: 0.85;
+        opacity: 0.9;
         min-height: 1.2em;
       }
       p.help {
@@ -66,15 +63,22 @@
     <button type="button" id="apply">Apply slot</button>
     <div id="status">Waiting for Stream Deck…</div>
     <p class="help">
-      Slot 1–6 maps to Codex Micro agent keys. Use Apply if the dropdown alone
-      does not update the key face (label A1–A6).
+      Slot 1–6 = Codex Micro agent keys. After Apply, the key face should
+      show A1–A6. Companion must be running for live colors.
     </p>
     <script>
+      /**
+       * Stream Deck PI: setSettings/getSettings/sendToPlugin must use the
+       * Property Inspector UUID (2nd arg to connectElgatoStreamDeckSocket)
+       * as `context` — NOT actionInfo.context. Using the action context
+       * yields: "setSettings from the wrong context".
+       */
       (function () {
         var websocket = null;
-        var pluginUUID = "";
+        // PI registration UUID (INCONTEXT) — required for setSettings
+        var piUUID = "";
         var actionUUID = "";
-        var context = "";
+        var actionContext = "";
         var select = document.getElementById("slot");
         var statusEl = document.getElementById("status");
         var applyBtn = document.getElementById("apply");
@@ -85,7 +89,13 @@
 
         function coerceSlot(raw) {
           var n = typeof raw === "string" ? parseInt(raw, 10) : raw;
-          if (typeof n === "number" && isFinite(n) && n >= 0 && n <= 5 && n === (n | 0))
+          if (
+            typeof n === "number" &&
+            isFinite(n) &&
+            n >= 0 &&
+            n <= 5 &&
+            n === (n | 0)
+          )
             return n;
           return 0;
         }
@@ -98,7 +108,7 @@
 
         function send(obj) {
           if (!websocket || websocket.readyState !== WebSocket.OPEN) {
-            setStatus("Not connected — reopen this key’s settings");
+            setStatus("Not connected — reopen this key");
             return false;
           }
           websocket.send(JSON.stringify(obj));
@@ -107,40 +117,48 @@
 
         function saveSlot() {
           var slot = coerceSlot(select.value);
-          if (!actionUUID || !context) {
-            setStatus("Missing action/context — reopen property inspector");
+          if (!piUUID) {
+            setStatus("Missing PI UUID — reopen property inspector");
             return;
           }
 
-          // 1) Official settings persistence (triggers didReceiveSettings on plugin)
+          // Context MUST be the Property Inspector UUID (piUUID), not actionContext
           var ok1 = send({
             event: "setSettings",
-            action: actionUUID,
-            context: context,
+            context: piUUID,
             payload: { slot: slot },
           });
 
-          // 2) Direct plugin message (belt-and-suspenders)
-          var ok2 = send({
-            event: "sendToPlugin",
-            action: actionUUID,
-            context: context,
-            payload: { event: "setSlot", slot: slot },
-          });
+          // Optional: also notify plugin directly (context = action instance)
+          if (actionUUID && actionContext) {
+            send({
+              event: "sendToPlugin",
+              action: actionUUID,
+              context: actionContext,
+              payload: { event: "setSlot", slot: slot },
+            });
+          }
 
-          if (ok1 || ok2) {
-            setStatus("Applied Slot " + (slot + 1) + " — check key face A" + (slot + 1));
+          if (ok1) {
+            setStatus(
+              "Saved Slot " +
+                (slot + 1) +
+                " — key should show A" +
+                (slot + 1),
+            );
           }
         }
 
         window.connectElgatoStreamDeckSocket = function (
           inPort,
-          inUUID,
+          inPropertyInspectorUUID,
           inRegisterEvent,
           inInfo,
           inActionInfo,
         ) {
-          pluginUUID = inUUID;
+          // THIS is the context Stream Deck accepts for setSettings from the PI
+          piUUID = inPropertyInspectorUUID;
+
           var actionInfo = {};
           try {
             actionInfo = JSON.parse(inActionInfo);
@@ -150,27 +168,20 @@
           }
 
           actionUUID = actionInfo.action || "";
-          context = actionInfo.context || "";
+          actionContext = actionInfo.context || "";
           applySettings(
             (actionInfo.payload && actionInfo.payload.settings) || {},
-          );
-
-          setStatus(
-            "action=" +
-              (actionUUID ? "ok" : "MISSING") +
-              " ctx=" +
-              (context ? "ok" : "MISSING"),
           );
 
           websocket = new WebSocket("ws://127.0.0.1:" + inPort);
 
           websocket.onopen = function () {
-            send({ event: inRegisterEvent, uuid: inUUID });
-            // getSettings requires both action + context
+            // Register PI session with PI UUID
+            send({ event: inRegisterEvent, uuid: piUUID });
+            // getSettings also uses PI UUID as context
             send({
               event: "getSettings",
-              action: actionUUID,
-              context: context,
+              context: piUUID,
             });
             setStatus("Connected. Pick a slot, then Apply.");
           };
